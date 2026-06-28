@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import GroupKFold
 
@@ -144,3 +145,38 @@ def run_experiments(
         )
         results[name] = (mean_rmse, std_rmse)
     return results
+
+
+def get_oof_predictions(X, y, cat_features, splitter, params=None):
+    """Kumpulkan out-of-fold predictions sejajar dengan index asli X.
+
+    Berbeda dengan cross_validate_catboost yang hanya return RMSE agregat,
+    fungsi ini return prediksi per-baris sehingga bisa dipakai untuk error
+    analysis (residual, segmentasi, kasus ekstrem).
+
+    Parameters
+    ----------
+    X : pd.DataFrame
+    y : pd.Series
+    cat_features : list[str]
+    splitter : splitter object (StratifiedKFold, GroupKFold, dll.)
+    params : dict, optional
+
+    Returns
+    -------
+    oof_preds : pd.Series
+        Prediksi OOF dengan index sama seperti y.
+    """
+    oof_preds = np.full(len(y), np.nan)
+    groups = X["source_id"] if isinstance(splitter, GroupKFold) else None
+
+    for train_idx, val_idx in splitter.split(X, X["source_id"], groups=groups):
+        X_train, X_val = X.iloc[train_idx], X.iloc[val_idx]
+        y_train = y.iloc[train_idx]
+
+        model = build_catboost(params)
+        model.fit(X_train, y_train, cat_features=cat_features)
+
+        oof_preds[val_idx] = model.predict(X_val)
+
+    return pd.Series(oof_preds, index=y.index, name="oof_pred")
