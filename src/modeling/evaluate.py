@@ -112,7 +112,14 @@ def evaluate_feature_set(
     )
 
 
-def run_experiments(X, y, cat_feats, splitter, experiments):
+def run_experiments(
+    X,
+    y,
+    cat_feats,
+    splitter,
+    experiments,
+    params=None,
+):
     """Jalankan evaluate_feature_set untuk beberapa skenario drop_cols.
 
     Parameters
@@ -128,7 +135,12 @@ def run_experiments(X, y, cat_feats, splitter, experiments):
     results = {}
     for name, drop_cols in experiments.items():
         mean_rmse, std_rmse, _ = evaluate_feature_set(
-            X, y, cat_feats, splitter, drop_cols=drop_cols
+            X,
+            y,
+            cat_feats,
+            splitter,
+            drop_cols=drop_cols,
+            params=params,
         )
         results[name] = (mean_rmse, std_rmse)
     return results
