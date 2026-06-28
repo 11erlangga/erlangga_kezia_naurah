@@ -35,18 +35,28 @@ def objective(trial, X, y, cat_feats, n_splits=5, extra_params=None):
     Returns:
         float: Mean RMSE across folds.
     """
+    extra_params = extra_params or {}
+    is_gpu = extra_params.get("task_type", "CPU").upper() == "GPU"
+
     tuned_params = {
         "iterations": 1000,
         "learning_rate": trial.suggest_float("learning_rate", 1e-3, 0.1, log=True),
         "depth": trial.suggest_int("depth", 1, 10),
         "bootstrap_type": trial.suggest_categorical(
-            "bootstrap_type", ["Bayesian", "Bernoulli", "MVS"]
+            "bootstrap_type",
+            ["Bayesian", "Bernoulli"] if is_gpu else ["Bayesian", "Bernoulli", "MVS"],
         ),
         "subsample": trial.suggest_float("subsample", 0.05, 1.0),
-        "colsample_bylevel": trial.suggest_float("colsample_bylevel", 0.05, 1.0),
         "min_data_in_leaf": trial.suggest_int("min_data_in_leaf", 1, 100),
     }
-    params = {**FIXED_PARAMS, **tuned_params, **(extra_params or {})}
+
+    # colsample_bylevel (rsm) tidak support di GPU
+    if not is_gpu:
+        tuned_params["colsample_bylevel"] = trial.suggest_float(
+            "colsample_bylevel", 0.05, 1.0
+        )
+
+    params = {**FIXED_PARAMS, **tuned_params, **extra_params}
 
     skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=42)
     strata = X["source_id"]
@@ -97,6 +107,8 @@ def tune_catboost(X, y, cat_feats, n_trials=100, n_splits=5, extra_params=None):
         study.best_params TIDAK menyertakan FIXED_PARAMS (eval_metric) karena
         itu bukan hasil trial.suggest_*. Untuk rekonstruksi model final,
         gabungkan manual: {**FIXED_PARAMS, **study.best_params}.
+        Kalau pakai GPU, colsample_bylevel juga tidak ada di study.best_params
+        karena tidak dimasukkan ke search space.
     """
     study = optuna.create_study(
         direction="minimize",
