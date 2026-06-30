@@ -13,11 +13,11 @@ FIXED_PARAMS = {
 
 
 def objective(trial, X, y, cat_feats, n_splits=5, extra_params=None):
-    """Hyperparam space dari https://forecastegy.com/posts/catboost-hyperparameter-tuning-guide-with-optuna/
+    """Fungsi objektif untuk trial Optuna (Hyperparam space dari forecastegy.com).
 
-    Menggunakan StratifiedKFold berdasarkan source_id — setiap fold dijamin
-    mengandung distribusi source_id yang proporsional. Konsekuensinya: satu
-    source_id bisa muncul di train dan val sekaligus (tidak ada jaminan
+    Menggunakan StratifiedKFold berdasarkan `source_id` — setiap fold dijamin
+    mengandung distribusi `source_id` yang proporsional. Konsekuensinya: satu
+    `source_id` bisa muncul di train dan val sekaligus (tidak ada jaminan
     no-leakage antar source).
 
     Kompatibilitas parameter CatBoost:
@@ -26,19 +26,19 @@ def objective(trial, X, y, cat_feats, n_splits=5, extra_params=None):
         - bootstrap_type MVS: tidak support di GPU
 
     Args:
-        trial: Optuna trial object.
-        X: Feature dataframe (harus mengandung kolom 'source_id').
-        y: Target series.
-        cat_feats: List nama kolom kategorik.
-        n_splits: Jumlah fold. Defaults to 5.
-        extra_params: Dict parameter tambahan (misal GPU_PARAMS) yang di-merge
+        trial (optuna.trial.Trial): Optuna trial object.
+        X (pd.DataFrame): Feature dataframe (harus mengandung kolom 'source_id').
+        y (pd.Series): Target series.
+        cat_feats (list[str]): List nama kolom kategorik.
+        n_splits (int, optional): Jumlah fold. Defaults to 5.
+        extra_params (dict, optional): Dict parameter tambahan (misal GPU_PARAMS) yang di-merge
             ke params sebelum training. Defaults to None.
 
     Raises:
-        optuna.TrialPruned: Jika trial di-prune oleh MedianPruner.
+        optuna.exceptions.TrialPruned: Jika trial di-prune oleh MedianPruner.
 
     Returns:
-        float: Mean RMSE across folds.
+        float: Rata-rata (mean) RMSE dari seluruh fold.
     """
     extra_params = extra_params or {}
     is_gpu = extra_params.get("task_type", "CPU").upper() == "GPU"
@@ -99,26 +99,26 @@ def tune_catboost(X, y, cat_feats, n_trials=100, n_splits=5, extra_params=None):
     """Cari hyperparameter CatBoost terbaik via Optuna + StratifiedKFold CV.
 
     Stratifikasi dilakukan berdasarkan kolom 'source_id' di X — distribusi
-    source_id dijaga proporsional di setiap fold.
+    `source_id` dijaga proporsional di setiap fold.
 
     Args:
-        X: Feature dataframe.
-        y: Target series.
-        cat_feats: List nama kolom kategorik.
-        n_trials: Jumlah trial Optuna. Defaults to 100.
-        n_splits: Jumlah fold CV. Defaults to 5.
-        extra_params: Dict parameter tambahan (misal GPU_PARAMS) yang di-merge
+        X (pd.DataFrame): Feature dataframe.
+        y (pd.Series): Target series.
+        cat_feats (list[str]): List nama kolom kategorik.
+        n_trials (int, optional): Jumlah trial Optuna. Defaults to 100.
+        n_splits (int, optional): Jumlah fold CV. Defaults to 5.
+        extra_params (dict, optional): Dict parameter tambahan (misal GPU_PARAMS) yang di-merge
             ke setiap trial. Defaults to None.
 
     Returns:
-        optuna.Study: Study object hasil optimasi.
+        optuna.study.Study: Study object hasil optimasi dari Optuna.
 
     Note:
-        study.best_params TIDAK menyertakan FIXED_PARAMS (eval_metric) karena
-        itu bukan hasil trial.suggest_*. Untuk rekonstruksi model final,
-        gabungkan manual: {**FIXED_PARAMS, **study.best_params}.
+        `study.best_params` TIDAK menyertakan `FIXED_PARAMS` (eval_metric) karena
+        itu bukan hasil `trial.suggest_*`. Untuk rekonstruksi model final,
+        gabungkan secara manual: `{**FIXED_PARAMS, **study.best_params}`.
         Parameter kondisional (subsample, colsample_bylevel) mungkin juga
-        tidak ada di study.best_params tergantung bootstrap_type dan device
+        tidak ada di `study.best_params` tergantung bootstrap_type dan device
         yang dipakai.
     """
     study = optuna.create_study(

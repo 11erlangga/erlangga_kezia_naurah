@@ -11,6 +11,19 @@ def apply_feature_drop(
     cat_features,
     drop_cols=None,
 ):
+    """Menghapus kolom tertentu dari dataset dan memperbarui daftar fitur kategorik.
+
+    Args:
+        X (pd.DataFrame): Dataset fitur (features).
+        cat_features (list[str]): Daftar nama kolom yang bertipe kategorik.
+        drop_cols (list[str], optional): Daftar nama kolom yang ingin dihapus.
+            Defaults to None.
+
+    Returns:
+        tuple[pd.DataFrame, list[str]]: Sebuah tuple berisi:
+            - pd.DataFrame: Dataset baru yang kolomnya sudah dihapus.
+            - list[str]: Daftar fitur kategorik baru (tanpa kolom yang dihapus).
+    """
     drop_cols = drop_cols or []
 
     X_new = X.drop(columns=drop_cols, errors="ignore")
@@ -29,6 +42,22 @@ def evaluate_holdout(
     drop_cols=None,
     params=None,
 ):
+    """Mengevaluasi model CatBoost menggunakan pendekatan holdout (train-val split).
+
+    Args:
+        X_train (pd.DataFrame): Dataset fitur untuk training.
+        X_val (pd.DataFrame): Dataset fitur untuk validasi.
+        y_train (pd.Series): Target untuk training.
+        y_val (pd.Series): Target untuk validasi.
+        cat_features (list[str]): Daftar nama kolom kategorik.
+        drop_cols (list[str], optional): Daftar kolom yang akan diabaikan/dihapus
+            saat training dan inferensi. Defaults to None.
+        params (dict, optional): Parameter custom untuk inisialisasi CatBoost.
+            Defaults to None.
+
+    Returns:
+        float: Nilai RMSE (Root Mean Squared Error) pada data validasi.
+    """
     X_train_new, cat_new = apply_feature_drop(
         X_train,
         cat_features,
@@ -59,6 +88,26 @@ def cross_validate_catboost(
     splitter,
     params=None,
 ):
+    """Melakukan evaluasi cross-validation untuk model CatBoost.
+
+    Jika `splitter` yang digunakan adalah `GroupKFold`, maka pengelompokan
+    akan dilakukan berdasarkan kolom `source_id`.
+
+    Args:
+        X (pd.DataFrame): Dataset fitur.
+        y (pd.Series): Dataset target.
+        cat_features (list[str]): Daftar nama kolom kategorik.
+        splitter (object): Objek cross-validator dari scikit-learn
+            (misalnya KFold, StratifiedKFold, GroupKFold).
+        params (dict, optional): Parameter custom untuk model CatBoost.
+            Defaults to None.
+
+    Returns:
+        tuple[float, float, list[float]]: Sebuah tuple berisi:
+            - float: Rata-rata (mean) RMSE dari semua fold.
+            - float: Standar deviasi (std) RMSE dari semua fold.
+            - list[float]: Daftar skor RMSE untuk masing-masing fold.
+    """
     scores = []
 
     groups = None
@@ -98,6 +147,21 @@ def evaluate_feature_set(
     drop_cols=None,
     params=None,
 ):
+    """Mengevaluasi satu kombinasi set fitur (setelah drop kolom tertentu) dengan CV.
+
+    Args:
+        X (pd.DataFrame): Dataset fitur.
+        y (pd.Series): Dataset target.
+        cat_features (list[str]): Daftar nama kolom kategorik.
+        splitter (object): Objek cross-validator scikit-learn.
+        drop_cols (list[str], optional): Kolom yang ingin di-drop sebelum CV.
+            Defaults to None.
+        params (dict, optional): Parameter model. Defaults to None.
+
+    Returns:
+        tuple[float, float, list[float]]: Hasil fungsi `cross_validate_catboost`
+            (mean RMSE, std RMSE, daftar skor).
+    """
     X_new, cat_new = apply_feature_drop(
         X,
         cat_features,
@@ -121,17 +185,20 @@ def run_experiments(
     experiments,
     params=None,
 ):
-    """Jalankan evaluate_feature_set untuk beberapa skenario drop_cols.
+    """Jalankan evaluasi (evaluate_feature_set) untuk beberapa skenario penghapusan kolom.
 
-    Parameters
-    ----------
-    experiments : dict[str, list[str]]
-        Mapping nama eksperimen -> kolom yang di-drop.
+    Args:
+        X (pd.DataFrame): Dataset fitur.
+        y (pd.Series): Dataset target.
+        cat_feats (list[str]): Daftar nama kolom kategorik.
+        splitter (object): Objek cross-validator scikit-learn.
+        experiments (dict[str, list[str]]): Mapping nama eksperimen ke daftar
+            kolom yang akan di-drop.
+        params (dict, optional): Parameter model CatBoost. Defaults to None.
 
-    Returns
-    -------
-    dict[str, tuple[float, float]]
-        Mapping nama eksperimen -> (mean_rmse, std_rmse).
+    Returns:
+        dict[str, tuple[float, float]]: Dictionary hasil eksperimen dengan
+            mapping nama eksperimen ke tuple (mean_rmse, std_rmse).
     """
     results = {}
     for name, drop_cols in experiments.items():
@@ -148,24 +215,22 @@ def run_experiments(
 
 
 def get_oof_predictions(X, y, cat_features, splitter, params=None):
-    """Kumpulkan out-of-fold predictions sejajar dengan index asli X.
+    """Kumpulkan Out-Of-Fold (OOF) predictions sejajar dengan index asli X.
 
-    Berbeda dengan cross_validate_catboost yang hanya return RMSE agregat,
-    fungsi ini return prediksi per-baris sehingga bisa dipakai untuk error
-    analysis (residual, segmentasi, kasus ekstrem).
+    Berbeda dengan cross_validate_catboost yang hanya mengembalikan RMSE agregat,
+    fungsi ini menghasilkan prediksi per-baris sehingga bisa digunakan untuk error
+    analysis seperti analisis residual, segmentasi, atau identifikasi kasus ekstrem.
 
-    Parameters
-    ----------
-    X : pd.DataFrame
-    y : pd.Series
-    cat_features : list[str]
-    splitter : splitter object (StratifiedKFold, GroupKFold, dll.)
-    params : dict, optional
+    Args:
+        X (pd.DataFrame): Dataset fitur.
+        y (pd.Series): Dataset target.
+        cat_features (list[str]): Daftar nama kolom kategorik.
+        splitter (object): Objek cross-validator scikit-learn (StratifiedKFold,
+            GroupKFold, dll).
+        params (dict, optional): Parameter model CatBoost. Defaults to None.
 
-    Returns
-    -------
-    oof_preds : pd.Series
-        Prediksi OOF dengan index sama seperti y.
+    Returns:
+        pd.Series: Prediksi OOF dengan index yang sama seperti target `y`.
     """
     oof_preds = np.full(len(y), np.nan)
     groups = X["source_id"] if isinstance(splitter, GroupKFold) else None
